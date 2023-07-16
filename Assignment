@@ -1,0 +1,69 @@
+//This is not exact solution to the assignment ,but this is want i have understood and learnt from your provided question
+
+
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+
+	"github.com/gorilla/mux"
+	"github.com/tomchavakis/turf-go/intersect"
+)
+
+type Linestring struct {
+	Type        string        `json:"type"`
+	Coordinates [][]float64 `json:"coordinates"`
+}
+
+type IntersectionResult struct {
+	LineID    string    `json:"lineId"`
+	Intersect []float64 `json:"intersect"`
+}
+
+func main() {
+	router := mux.NewRouter()
+	router.HandleFunc("/intersections", requireAuth(findIntersections)).Methods("POST")
+	log.Fatal(http.ListenAndServe(":8080", router))
+}
+
+func findIntersections(w http.ResponseWriter, r *http.Request) {
+	var linestring Linestring
+	err := json.NewDecoder(r.Body).Decode(&linestring)
+	if err != nil {
+		http.Error(w, "Invalid linestring", http.StatusBadRequest)
+		return
+	}
+
+	// Perform intersection calculations
+	// Assuming lines is an array of 50 line coordinates
+	intersections := make([]IntersectionResult, 0)
+	for i, line := range lines {
+		result := intersect.LineStringLineString(linestring.Coordinates, line)
+		if result != nil {
+			intersections = append(intersections, IntersectionResult{
+				LineID:    "L" + strconv.Itoa(i+1),
+				Intersect: result,
+			})
+		}
+	}
+
+	if len(intersections) == 0 {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("No intersections found"))
+	} else {
+		json.NewEncoder(w).Encode(intersections)
+	}
+}
+
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "token value" {                  
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
